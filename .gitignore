@@ -28,6 +28,7 @@ uploads/
 credentials/
 *.json
 !requirements.txt
+!vercel.json
 token.json
 
 # Distribution / packaging
