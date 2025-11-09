@@ -179,18 +179,21 @@ handler = app
 
 if __name__ == '__main__':
     load_dotenv()
-    # ポート5000が使用中の場合は5001を使用
-    import socket
-    port = 5000
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    result = sock.connect_ex(('127.0.0.1', port))
-    sock.close()
-    if result == 0:
-        # ポート5000が使用中の場合
-        port = 5001
-        print(f"ポート5000が使用中のため、ポート{port}で起動します")
+    # Renderでは環境変数PORTを使用、ローカルでは5000を使用
+    port = int(os.environ.get('PORT', 5000))
+    # ポート5000が使用中の場合は5001を使用（ローカル環境のみ）
+    if port == 5000:
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        if result == 0:
+            # ポート5000が使用中の場合
+            port = 5001
+            print(f"ポート5000が使用中のため、ポート{port}で起動します")
+        else:
+            print(f"ポート{port}で起動します")
     else:
-        port = 5000
-        print(f"ポート{port}で起動します")
-    app.run(debug=True, host='0.0.0.0', port=port)
+        print(f"ポート{port}で起動します（Render環境）")
+    app.run(debug=False, host='0.0.0.0', port=port)
 
