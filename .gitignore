@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# 環境変数
+.env
+.env.local
+.env.*.local
+
+# 出力ファイル
+output/
+*.wav
+*_converted.wav
+
+# アップロードファイル
+uploads/
+
+# 認証情報
+credentials/
+*.json
+!requirements.txt
+token.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
