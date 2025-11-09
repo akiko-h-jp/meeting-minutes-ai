@@ -174,6 +174,9 @@ def download_file(session_id):
     return send_file(output_file, as_attachment=True, download_name='minutes.md')
 
 
+# Vercel用のエントリーポイント
+handler = app
+
 if __name__ == '__main__':
     load_dotenv()
     app.run(debug=True, host='0.0.0.0', port=5000)
