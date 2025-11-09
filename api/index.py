@@ -17,16 +17,25 @@ from pydub import AudioSegment
 
 
 # Vercel用のパス設定
+# VercelのServerless Functionsでは、プロジェクトルートからの相対パスを使用
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
+
+# 静的ファイルとテンプレートのパスを設定
 static_folder = os.path.join(project_root, 'static')
 template_folder = os.path.join(project_root, 'templates')
 
-# パスが存在するか確認
+# パスが存在するか確認（存在しない場合は相対パスを使用）
 if not os.path.exists(static_folder):
-    static_folder = 'static'
+    # Vercel環境では、プロジェクトルートからの相対パスを試す
+    static_folder = os.path.join(os.getcwd(), 'static')
+    if not os.path.exists(static_folder):
+        static_folder = 'static'
+
 if not os.path.exists(template_folder):
-    template_folder = 'templates'
+    template_folder = os.path.join(os.getcwd(), 'templates')
+    if not os.path.exists(template_folder):
+        template_folder = 'templates'
 
 app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
 app.config['UPLOAD_FOLDER'] = 'uploads'
