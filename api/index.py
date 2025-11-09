@@ -185,6 +185,7 @@ def download_file(session_id):
 
 # Vercel用のエントリーポイント
 # @vercel/pythonはFlaskアプリを自動的にWSGIアプリケーションとして認識します
+handler = app
 
 if __name__ == '__main__':
     load_dotenv()
