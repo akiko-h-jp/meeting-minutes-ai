@@ -41,10 +41,11 @@ if not os.path.exists(template_folder):
 
 # Flaskアプリの初期化
 # Vercel環境では、root_pathを明示的に設定
+# 静的ファイルとテンプレートのパスを絶対パスで設定
 app = Flask(
     __name__,
-    static_folder=static_folder,
-    template_folder=template_folder,
+    static_folder=static_folder if os.path.exists(static_folder) else None,
+    template_folder=template_folder if os.path.exists(template_folder) else None,
     root_path=project_root if os.path.exists(os.path.join(project_root, 'templates')) else None
 )
 app.config['UPLOAD_FOLDER'] = 'uploads'
