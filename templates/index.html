@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>議事録生成システム</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 議事録生成システム</h1>
+            <p class="subtitle">音声ファイルまたは文字起こし済みテキストファイルから自動で議事録を生成し、Googleドキュメントに保存します</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".mp4,.m4a,.wav,.mp3,.flac,.ogg,.webm,.txt,.md" style="display: none;">
+                    <label for="fileInput" class="upload-label">
+                        <span class="upload-icon">📁</span>
+                        <span class="upload-text">ファイルを選択</span>
+                    </label>
+                    <p class="file-info">対応形式: MP4, M4A, WAV, MP3, FLAC, OGG, WEBM, TXT, MD（文字起こし済みファイル）</p>
+                </div>
+            </div>
+
+            <div class="status-section" id="statusSection" style="display: none;">
+                <h2>処理状況</h2>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="status-list">
+                    <div class="status-item waiting" id="statusTranscription">
+                        <span class="status-icon">⏳</span>
+                        <span class="status-text">文字起こし待機中...</span>
+                    </div>
+                    <div class="status-item waiting" id="statusMinutes">
+                        <span class="status-icon">⏳</span>
+                        <span class="status-text">議事録生成待機中...</span>
+                    </div>
+                    <div class="status-item waiting" id="statusDocs">
+                        <span class="status-icon">⏳</span>
+                        <span class="status-text">Googleドキュメント保存待機中...</span>
+                    </div>
+                    <div class="status-item waiting" id="statusSlack">
+                        <span class="status-icon">⏳</span>
+                        <span class="status-text">Slack通知待機中...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <h2>処理結果</h2>
+                <div class="result-item">
+                    <h3>生成された議事録</h3>
+                    <div class="minutes-preview" id="minutesPreview"></div>
+                </div>
+                <div class="result-item">
+                    <h3>Slack通知内容</h3>
+                    <div class="slack-message" id="slackMessage"></div>
+                </div>
+                <div class="result-actions">
+                    <a href="#" id="downloadLink" class="btn btn-primary">議事録をダウンロード</a>
+                    <a href="#" id="docLink" target="_blank" class="btn btn-secondary">Googleドキュメントを開く</a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const statusSection = document.getElementById('statusSection');
+        const resultsSection = document.getElementById('resultsSection');
+        let currentSessionId = null;
+        let statusInterval = null;
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                currentSessionId = data.session_id;
+                statusSection.style.display = 'block';
+                resultsSection.style.display = 'none';
+                startStatusPolling();
+            } catch (error) {
+                alert('アップロードエラー: ' + error.message);
+            }
+        });
+
+        function startStatusPolling() {
+            if (statusInterval) clearInterval(statusInterval);
+            
+            statusInterval = setInterval(async () => {
+                if (!currentSessionId) return;
+
+                try {
+                    const response = await fetch(`/status/${currentSessionId}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        clearInterval(statusInterval);
+                        alert(data.error);
+                        return;
+                    }
+
+                    updateStatus(data);
+
+                    if (data.status === 'completed' || data.status === 'error') {
+                        clearInterval(statusInterval);
+                        if (data.status === 'completed') {
+                            showResults(data);
+                        } else {
+                            alert('エラー: ' + data.error);
+                        }
+                    }
+                } catch (error) {
+                    console.error('ステータス取得エラー:', error);
+                }
+            }, 1000);
+        }
+
+        function updateStatus(data) {
+            const steps = {
+                'transcription': { icon: '⏳', text: '文字起こし中...', completedText: '✅ 文字起こし完了', elementId: 'statusTranscription' },
+                'generating_minutes': { icon: '⏳', text: '議事録生成中...', completedText: '✅ 議事録生成完了', elementId: 'statusMinutes' },
+                'saving_to_docs': { icon: '⏳', text: 'Googleドキュメント保存中...', completedText: '✅ Googleドキュメント保存完了', elementId: 'statusDocs' },
+                'sending_slack': { icon: '⏳', text: 'Slack通知送信中...', completedText: '✅ Slack通知送信完了', elementId: 'statusSlack' },
+                'completed': { icon: '✅', text: '全て完了' }
+            };
+
+            const stepOrder = ['transcription', 'generating_minutes', 'saving_to_docs', 'sending_slack'];
+            const isCompleted = data.status === 'completed';
+
+            if (isCompleted) {
+                const allStepIds = ['statusTranscription', 'statusMinutes', 'statusDocs', 'statusSlack'];
+                allStepIds.forEach((elementId, index) => {
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        const iconElement = element.querySelector('.status-icon');
+                        const textElement = element.querySelector('.status-text');
+                        if (iconElement) {
+                            iconElement.textContent = '✅';
+                        }
+                        if (textElement) {
+                            const stepKey = stepOrder[index];
+                            textElement.textContent = steps[stepKey] ? steps[stepKey].completedText : '✅ 完了';
+                        }
+                        element.classList.add('completed');
+                        element.classList.remove('processing', 'waiting');
+                    }
+                });
+                document.getElementById('progressFill').style.width = '100%';
+                const statusSection = document.getElementById('statusSection');
+                if (statusSection) {
+                    let completedMessage = document.getElementById('completedMessage');
+                    if (!completedMessage) {
+                        completedMessage = document.createElement('div');
+                        completedMessage.id = 'completedMessage';
+                        completedMessage.className = 'completed-message';
+                        completedMessage.innerHTML = '<h3>🎉 全ての処理が完了しました！</h3>';
+                        statusSection.appendChild(completedMessage);
+                    }
+                }
+                return;
+            }
+
+            const currentStep = data.step;
+            const currentStepIndex = stepOrder.indexOf(currentStep);
+
+            stepOrder.forEach((step, index) => {
+                const stepInfo = steps[step];
+                const element = document.getElementById(stepInfo.elementId);
+                if (element) {
+                    if (index < currentStepIndex) {
+                        element.classList.remove('processing', 'waiting');
+                        element.classList.add('completed');
+                        const iconElement = element.querySelector('.status-icon');
+                        const textElement = element.querySelector('.status-text');
+                        if (iconElement) iconElement.textContent = '✅';
+                        if (textElement) textElement.textContent = stepInfo.completedText;
+                    } else if (index === currentStepIndex) {
+                        element.classList.remove('waiting', 'completed');
+                        element.classList.add('processing');
+                        const iconElement = element.querySelector('.status-icon');
+                        const textElement = element.querySelector('.status-text');
+                        if (iconElement) iconElement.textContent = stepInfo.icon;
+                        if (textElement) textElement.textContent = stepInfo.text;
+                    } else {
+                        element.classList.remove('processing', 'completed');
+                        element.classList.add('waiting');
+                    }
+                }
+            });
+
+            const progress = ((currentStepIndex + 1) / stepOrder.length) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        function showResults(data) {
+            resultsSection.style.display = 'block';
+            updateStatus(data);
+
+            if (data.minutes) {
+                const preview = document.getElementById('minutesPreview');
+                preview.innerHTML = convertMarkdownToHtml(data.minutes);
+            }
+
+            if (data.slack_message) {
+                document.getElementById('slackMessage').textContent = data.slack_message;
+            }
+
+            if (data.document_url) {
+                document.getElementById('docLink').href = data.document_url;
+            }
+
+            if (currentSessionId) {
+                document.getElementById('downloadLink').href = `/download/${currentSessionId}`;
+            }
+        }
+
+        function convertMarkdownToHtml(markdown) {
+            return markdown
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+                .replace(/\n/gim, '<br>');
+        }
+    </script>
+</body>
+</html>
+
