@@ -15,7 +15,16 @@ from src.slack_client import SlackClient
 from pydub import AudioSegment
 
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
+import sys
+import os
+
+# Vercel用のパス設定
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+static_folder = os.path.join(project_root, 'static')
+template_folder = os.path.join(project_root, 'templates')
+
+app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
 
