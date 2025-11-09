@@ -2,6 +2,7 @@
 議事録生成システムのFlaskアプリケーション
 """
 import os
+import sys
 import threading
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_file
@@ -15,14 +16,17 @@ from src.slack_client import SlackClient
 from pydub import AudioSegment
 
 
-import sys
-import os
-
 # Vercel用のパス設定
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 static_folder = os.path.join(project_root, 'static')
 template_folder = os.path.join(project_root, 'templates')
+
+# パスが存在するか確認
+if not os.path.exists(static_folder):
+    static_folder = 'static'
+if not os.path.exists(template_folder):
+    template_folder = 'templates'
 
 app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
 app.config['UPLOAD_FOLDER'] = 'uploads'
