@@ -22,14 +22,16 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 
 # 静的ファイルとテンプレートのパスを設定
+# Vercel環境では、プロジェクトルートからの絶対パスを使用
 static_folder = os.path.join(project_root, 'static')
 template_folder = os.path.join(project_root, 'templates')
 
-# パスが存在するか確認（存在しない場合は相対パスを使用）
+# パスが存在しない場合のフォールバック
 if not os.path.exists(static_folder):
-    # Vercel環境では、プロジェクトルートからの相対パスを試す
+    # 現在の作業ディレクトリからの相対パスを試す
     static_folder = os.path.join(os.getcwd(), 'static')
     if not os.path.exists(static_folder):
+        # 最後の手段として相対パスを使用
         static_folder = 'static'
 
 if not os.path.exists(template_folder):
@@ -37,7 +39,14 @@ if not os.path.exists(template_folder):
     if not os.path.exists(template_folder):
         template_folder = 'templates'
 
-app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
+# Flaskアプリの初期化
+# Vercel環境では、root_pathを明示的に設定
+app = Flask(
+    __name__,
+    static_folder=static_folder,
+    template_folder=template_folder,
+    root_path=project_root if os.path.exists(os.path.join(project_root, 'templates')) else None
+)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
 
