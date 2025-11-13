@@ -23,7 +23,26 @@ class GoogleDocsClient:
             token_file: トークンファイルのパス
         """
         if credentials_file is None:
-            credentials_file = os.getenv('GOOGLE_OAUTH_CREDENTIALS')
+            # 環境変数から認証情報を取得
+            credentials_json = os.getenv('GOOGLE_OAUTH_CREDENTIALS')
+            if credentials_json:
+                # 環境変数がJSON文字列の場合、一時ファイルとして保存
+                import json
+                import tempfile
+                try:
+                    # JSON文字列をパースして検証
+                    json.loads(credentials_json)
+                    # 一時ファイルを作成
+                    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+                    temp_file.write(credentials_json)
+                    temp_file.close()
+                    credentials_file = temp_file.name
+                except json.JSONDecodeError:
+                    # JSON文字列でない場合は、ファイルパスとして扱う
+                    credentials_file = credentials_json
+            else:
+                # 環境変数が設定されていない場合は、デフォルトのパスを試す
+                credentials_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         
         if token_file is None:
             token_file = os.getenv('GOOGLE_TOKEN_FILE', 'token.json')
