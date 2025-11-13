@@ -55,6 +55,24 @@ class GoogleDocsClient:
     
     def _authenticate(self):
         """OAuth2認証を実行"""
+        # まず、サービスアカウントキーを試す（クラウド環境用）
+        service_account_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+        if service_account_json:
+            try:
+                # JSON文字列をパース
+                service_account_info = json.loads(service_account_json)
+                # サービスアカウント認証情報を作成
+                creds = service_account.Credentials.from_service_account_info(
+                    service_account_info, scopes=SCOPES)
+                return creds
+            except (json.JSONDecodeError, ValueError) as e:
+                # JSON文字列でない場合は、ファイルパスとして扱う
+                if os.path.exists(service_account_json):
+                    creds = service_account.Credentials.from_service_account_file(
+                        service_account_json, scopes=SCOPES)
+                    return creds
+        
+        # サービスアカウントキーが設定されていない場合は、OAuth認証を試す（ローカル環境用）
         creds = None
         
         if os.path.exists(self.token_file):
@@ -66,7 +84,10 @@ class GoogleDocsClient:
                 creds.refresh(Request())
             else:
                 if not self.credentials_file or not os.path.exists(self.credentials_file):
-                    raise FileNotFoundError(f"認証情報ファイルが見つかりません: {self.credentials_file}")
+                    raise FileNotFoundError(
+                        f"認証情報ファイルが見つかりません: {self.credentials_file}\n"
+                        "Render環境では、環境変数GOOGLE_SERVICE_ACCOUNT_JSONにサービスアカウントキーのJSONを設定してください。"
+                    )
                 
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_file, SCOPES)
