@@ -23,26 +23,31 @@ class GoogleDocsClient:
             token_file: トークンファイルのパス
         """
         if credentials_file is None:
-            # 環境変数から認証情報を取得
-            credentials_json = os.getenv('GOOGLE_OAUTH_CREDENTIALS')
-            if credentials_json:
-                # 環境変数がJSON文字列の場合、一時ファイルとして保存
-                import json
-                import tempfile
-                try:
-                    # JSON文字列をパースして検証
-                    json.loads(credentials_json)
-                    # 一時ファイルを作成
-                    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-                    temp_file.write(credentials_json)
-                    temp_file.close()
-                    credentials_file = temp_file.name
-                except json.JSONDecodeError:
-                    # JSON文字列でない場合は、ファイルパスとして扱う
-                    credentials_file = credentials_json
+            # まず、サービスアカウントキーを確認（クラウド環境用）
+            # サービスアカウントキーが設定されている場合は、OAuth認証情報は不要
+            service_account_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+            if service_account_json:
+                # サービスアカウントキーが設定されている場合は、OAuth認証情報は不要
+                credentials_file = None
             else:
-                # 環境変数が設定されていない場合は、デフォルトのパスを試す
-                credentials_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+                # サービスアカウントキーが設定されていない場合のみ、OAuth認証情報を試す（ローカル環境用）
+                credentials_json = os.getenv('GOOGLE_OAUTH_CREDENTIALS')
+                if credentials_json:
+                    # 環境変数がJSON文字列の場合、一時ファイルとして保存
+                    try:
+                        # JSON文字列をパースして検証
+                        json.loads(credentials_json)
+                        # 一時ファイルを作成
+                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+                        temp_file.write(credentials_json)
+                        temp_file.close()
+                        credentials_file = temp_file.name
+                    except json.JSONDecodeError:
+                        # JSON文字列でない場合は、ファイルパスとして扱う
+                        credentials_file = credentials_json
+                else:
+                    # 環境変数が設定されていない場合は、デフォルトのパスを試す
+                    credentials_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         
         if token_file is None:
             token_file = os.getenv('GOOGLE_TOKEN_FILE', 'token.json')
@@ -71,8 +76,18 @@ class GoogleDocsClient:
                     creds = service_account.Credentials.from_service_account_file(
                         service_account_json, scopes=SCOPES)
                     return creds
+                else:
+                    raise ValueError(f"サービスアカウントキーのJSONが無効です: {e}")
         
         # サービスアカウントキーが設定されていない場合は、OAuth認証を試す（ローカル環境用）
+        # ただし、Render環境ではサービスアカウントキーが必須
+        if not self.credentials_file:
+            raise FileNotFoundError(
+                "認証情報が見つかりません。\n"
+                "Render環境では、環境変数GOOGLE_SERVICE_ACCOUNT_JSONにサービスアカウントキーのJSONを設定してください。\n"
+                "ローカル環境では、環境変数GOOGLE_OAUTH_CREDENTIALSにOAuth認証情報を設定してください。"
+            )
+        
         creds = None
         
         if os.path.exists(self.token_file):
@@ -83,7 +98,7 @@ class GoogleDocsClient:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                if not self.credentials_file or not os.path.exists(self.credentials_file):
+                if not os.path.exists(self.credentials_file):
                     raise FileNotFoundError(
                         f"認証情報ファイルが見つかりません: {self.credentials_file}\n"
                         "Render環境では、環境変数GOOGLE_SERVICE_ACCOUNT_JSONにサービスアカウントキーのJSONを設定してください。"
