@@ -25,15 +25,13 @@ class GoogleDocsClient:
             credentials_file: OAuth2認証情報ファイルのパス
             token_file: トークンファイルのパス
         """
+        # まず、サービスアカウントキーを確認（クラウド環境用）
+        # サービスアカウントキーが設定されている場合は、OAuth認証情報は不要
+        self.service_account_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+        
         if credentials_file is None:
-            # まず、サービスアカウントキーを確認（クラウド環境用）
-            # サービスアカウントキーが設定されている場合は、OAuth認証情報は不要
-            service_account_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
-            if service_account_json:
-                # サービスアカウントキーが設定されている場合は、OAuth認証情報は不要
-                credentials_file = None
-            else:
-                # サービスアカウントキーが設定されていない場合のみ、OAuth認証情報を試す（ローカル環境用）
+            # サービスアカウントキーが設定されていない場合のみ、OAuth認証情報を試す（ローカル環境用）
+            if not self.service_account_json:
                 credentials_json = os.getenv('GOOGLE_OAUTH_CREDENTIALS')
                 if credentials_json:
                     # 環境変数がJSON文字列の場合、一時ファイルとして保存
@@ -64,20 +62,19 @@ class GoogleDocsClient:
     def _authenticate(self):
         """OAuth2認証を実行"""
         # まず、サービスアカウントキーを試す（クラウド環境用）
-        service_account_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
-        if service_account_json:
+        if self.service_account_json:
             try:
                 # JSON文字列をパース
-                service_account_info = json.loads(service_account_json)
+                service_account_info = json.loads(self.service_account_json)
                 # サービスアカウント認証情報を作成
                 creds = service_account.Credentials.from_service_account_info(
                     service_account_info, scopes=SCOPES)
                 return creds
             except (json.JSONDecodeError, ValueError) as e:
                 # JSON文字列でない場合は、ファイルパスとして扱う
-                if os.path.exists(service_account_json):
+                if os.path.exists(self.service_account_json):
                     creds = service_account.Credentials.from_service_account_file(
-                        service_account_json, scopes=SCOPES)
+                        self.service_account_json, scopes=SCOPES)
                     return creds
                 else:
                     raise ValueError(f"サービスアカウントキーのJSONが無効です: {e}")
